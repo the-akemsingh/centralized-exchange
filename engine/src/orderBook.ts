@@ -1,4 +1,3 @@
-import type { RedisClientType } from "redis";
 import { balances } from "./handleOrder";
 import { v7 as uuidv7 } from "uuid";
 import { RedisManager } from "./redisManager";
@@ -53,7 +52,7 @@ export class OrderBook {
         for (let bid of this.bids) {
             if (quantity - filledQuantity === 0) break;
 
-            if (bid.price >= price) {
+            if (bid.price >= price && bid.userId!==userId) {
                 const filledQuantityFromThisBid = Math.min(bid.quantity - bid.filledQuantity, quantity - filledQuantity)
 
                 filledQuantity += filledQuantityFromThisBid
@@ -120,7 +119,6 @@ export class OrderBook {
         }
         // TODO:
         //add this to db queue to sync the database with latest trades happening
-        //publish this trade (for recent trades list) , ticker(send at which price recent trade happened) and depth(orderbook update on client side) to websocket for frontend
         return {
             symbol: `${this.baseAsset}_${this.quoteAsset}`,
             fills,
@@ -139,12 +137,13 @@ export class OrderBook {
         let fills: fill[] = []
         let filledQuantity = 0;
 
-        this.asks.sort((a, b) => a.price - b.price);
+        // Real exchanges don't do this: Only the insertion point is found; the entire array isn't resorted.
+        this.asks.sort((a, b) => a.price - b.price); //it's O(n log n) every time. 
         for (let ask of this.asks) {
             console.log("looping through asks")
             if (quantity - filledQuantity === 0) break;
 
-            if (ask.price <= price) {
+            if (ask.price <= price && ask.userId!==userId) {
                 console.log("relevant ask founded")
                 const filledQuantityFromThisAsk = Math.min(
                     ask.quantity - ask.filledQuantity,
@@ -227,7 +226,6 @@ export class OrderBook {
 
         // TODO:
         //add this to db queue to sync the database with latest trades happening
-        //publish this trade (for recent trades list) , ticker(send at which price recent trade happened) and depth(orderbook update on client side) to websocket for frontend
         return {
             symbol: `${this.baseAsset}_${this.quoteAsset}`,
             fills,
