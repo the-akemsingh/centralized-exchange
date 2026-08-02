@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { ChartPlaceholder } from "@/components/trading/chart-placeholder";
 import { OrderTicket } from "@/components/trading/order-ticket";
 import { OrderbookTradesPanel } from "@/components/trading/orderbook-trades-panel";
-import type { DepthState, TradeState } from "@/components/trading/types";
+import type { AccountState, DepthState, TradeState } from "@/components/trading/types";
 
 const SYMBOL = "TATA_INR";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3005";
+const STORAGE_KEY = "exchange-user-id";
 
 function normalizeTrade(trade: unknown): TradeState | null {
   if (!trade || typeof trade !== "object") {
@@ -48,9 +49,69 @@ export default function Home() {
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
   const [quantity, setQuantity] = useState("1");
   const [price, setPrice] = useState("0");
-  const [userId, setUserId] = useState("demo-user");
+  const [userId, setUserId] = useState("");
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const [authStatus, setAuthStatus] = useState("Loading account...");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAccount = async () => {
+      try {
+        const storedUserId = window.localStorage.getItem(STORAGE_KEY);
+
+        if (storedUserId) {
+          setUserId(storedUserId);
+          const response = await fetch(`${API_BASE}/getBalance/${storedUserId}`, {
+            method: "GET"
+          });
+
+          const payload = await response.json();
+          const fetchedAccount = (payload?.response ?? null) as AccountState | null;
+
+          if (!mounted) {
+            return;
+          }
+
+          setAccount(fetchedAccount);
+          setAuthStatus("Account loaded");
+          return;
+        }
+
+        const response = await fetch(`${API_BASE}/register`, {
+          method: "POST",
+        });
+
+        const payload = await response.json();
+        const newUserId = payload?.response?.userId as string | undefined;
+        const newAccount = (payload?.response?.account ?? null) as AccountState | null;
+
+        if (!mounted) {
+          return;
+        }
+
+        if (newUserId) {
+          window.localStorage.setItem(STORAGE_KEY, newUserId);
+          setUserId(newUserId);
+        }
+
+        setAccount(newAccount);
+        setAuthStatus("New account created");
+      } catch {
+        if (mounted) {
+          setAuthStatus("Account unavailable");
+        }
+      }
+    };
+
+    loadAccount();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -201,23 +262,20 @@ export default function Home() {
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <ChartPlaceholder symbol={selectedSymbol} />
 
-          <div className="flex w-full shrink-0 flex-col gap-4" style={{ width: "920px" }}>
+          <div className="flex shrink-0 flex-col gap-4">
             <div className="flex items-center justify-between border border-white/10 bg-black/20 px-5 py-3 text-sm text-slate-400 backdrop-blur" style={{ borderRadius: 24 }}>
               <div>
                 <span className="text-slate-500">Market</span>
                 <span className="ml-2 font-semibold text-slate-100">{selectedSymbol}</span>
               </div>
-              <div>
-                <span className="text-slate-500">WebSocket</span>
-                <span className="ml-2 font-semibold text-slate-100">{status}</span>
-              </div>
             </div>
 
-            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_260px]">
               <OrderbookTradesPanel symbol={selectedSymbol} ticker={ticker} depth={depth} trades={trades} />
               <OrderTicket
                 symbol={selectedSymbol}
                 ticker={ticker}
+                account={account}
                 orderSide={orderSide}
                 setOrderSide={setOrderSide}
                 orderType={orderType}

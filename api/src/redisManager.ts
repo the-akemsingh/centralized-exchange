@@ -4,8 +4,8 @@ dotenv.config();
 import { v7 as uuidv7 } from "uuid";
 
 type OrderMessage = {
-  typeOfOrder: "CREATE_ORDER" | "DELETE_ORDER" | "GET_DEPTH" | "GET_TICKER" | "GET_TRADES";
-  data: {
+  type: "CREATE_ORDER" | "DELETE_ORDER" | "GET_DEPTH" | "GET_TICKER" | "GET_TRADES" | "GET_MARKETS" | "REGISTER_USER" | "GET_BALANCE";
+  data?: {
     symbol?: string;
     side?: string;
     quantity?: number;

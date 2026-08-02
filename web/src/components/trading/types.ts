@@ -9,3 +9,10 @@ export type TradeState = {
   side?: string;
   orderId?: string;
 };
+
+export type BalanceAssetState = {
+  available: number;
+  locked: number;
+};
+
+export type AccountState = Record<string, BalanceAssetState>;
