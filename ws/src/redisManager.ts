@@ -49,10 +49,11 @@ export class RedisManager {
         }
 
     }
-    
+
     updateHandler(channel: string, response: string) {
         SUBSCRIPTIONS.get(channel)?.forEach((user) => {
             if (user.socket.readyState === WebSocket.OPEN) {
+                console.log("msg rec for channel ---", channel, "and mesg is --", response)
                 user.socket.send(JSON.stringify({
                     channel,
                     data: JSON.parse(response)

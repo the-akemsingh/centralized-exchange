@@ -8,6 +8,26 @@ type userInfo = {
   };
 };
 export const balances: Map<string, userInfo> = new Map();
+balances.set("akem", {
+  "INR": {
+    available: 10000000,
+    locked: 0
+  },
+  "TATA": {
+    available: 10000,
+    locked: 0
+  }
+})
+balances.set("raman", {
+  "INR": {
+    available: 10000000,
+    locked: 0
+  },
+  "TATA": {
+    available: 10000,
+    locked: 0
+  }
+})
 const TATA_INR = new OrderBook("TATA", "INR", 0);
 const orderBooks: OrderBook[] = [TATA_INR];
 
@@ -21,8 +41,11 @@ function handleOrder(message: {
   userId: string;
   limit: number;
 }) {
+  console.log("now handleOrder have the order")
   const baseAsset = message.symbol.split("_")[0];
+  console.log("base a", baseAsset)
   const quoteAsset = message.symbol.split("_")[1];
+  console.log("quote a", quoteAsset)
   const orderBook = orderBooks.find(
     (orderBook) => orderBook.ticker() === message.symbol,
   );
@@ -33,11 +56,13 @@ function handleOrder(message: {
     case "CREATE_ORDER":
       try {
         if (message.side == "BUY") {
+          console.log("order was buy order")
           let userQuoteAssetRecord = balances.get(message.userId)?.[quoteAsset];
           if (
             userQuoteAssetRecord &&
             userQuoteAssetRecord.available >= message.price * message.quantity
           ) {
+            console.log("user have enough balance")
             lockUserBalance({
               userId: message.userId,
               asset: quoteAsset,
@@ -50,6 +75,7 @@ function handleOrder(message: {
               message.price,
             );
           } else {
+            console.log("user qoute asset record - -", JSON.stringify(userQuoteAssetRecord))
             return { status: "REJECTED", reason: "INSUFFICIENT_FUNDS" };
           }
         } else {
@@ -70,6 +96,7 @@ function handleOrder(message: {
               message.price,
             );
           } else {
+            console.log("user base asset record - -", JSON.stringify(userBaseAssetRecord))
             return { status: "REJECTED", reason: "INSUFFICIENT_FUNDS" };
           }
         }
@@ -87,14 +114,18 @@ function handleOrder(message: {
       break;
     case "GET_DEPTH":
       try {
-        return orderBook.getDepth();
+        console.log("get depth order rec")
+        const depth = orderBook.getDepth();
+        console.log(JSON.stringify(depth))
+        return depth
       } catch (e) {
         console.log("error in engine's create order block - ", e);
       }
       break;
     case "GET_TICKER":
       try {
-        return orderBook.lastTradedPrice;
+        const ticker = orderBook.lastTradedPrice;
+        return ticker
       } catch (e) {
         console.log("error in engine's create order block - ", e);
       }
@@ -119,5 +150,7 @@ function lockUserBalance(data: {
     userAsset.available -= data.amountToBeLocked;
     userAsset.locked += data.amountToBeLocked;
   }
+
+  console.log("user balance locked")
 }
 export default handleOrder;

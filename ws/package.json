@@ -15,5 +15,8 @@
     "express": "^5.2.1",
     "redis": "^6.1.0",
     "ws": "^8.21.1"
+  },
+    "scripts": {
+    "dev": "bun run src/index.ts"
   }
 }

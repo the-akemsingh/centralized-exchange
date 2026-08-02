@@ -1,26 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type DepthState = {
-  bids: [string, string][];
-  asks: [string, string][];
-};
-
-type TradeState = {
-  price: number;
-  quantity: number;
-  side?: string;
-  userId?: string;
-  orderId?: string;
-};
+import { ChartPlaceholder } from "@/components/trading/chart-placeholder";
+import { OrderTicket } from "@/components/trading/order-ticket";
+import { OrderbookTradesPanel } from "@/components/trading/orderbook-trades-panel";
+import type { DepthState, TradeState } from "@/components/trading/types";
 
 const SYMBOL = "TATA_INR";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3005";
 
+function normalizeTrade(trade: unknown): TradeState | null {
+  if (!trade || typeof trade !== "object") {
+    return null;
+  }
+
+  const incoming = trade as {
+    price?: number;
+    amount?: number;
+    quantity?: number;
+    side?: string;
+    orderId?: string;
+    id?: string;
+  };
+
+  const price = incoming.price ?? incoming.amount;
+
+  if (typeof price !== "number" || typeof incoming.quantity !== "number") {
+    return null;
+  }
+
+  return {
+    price,
+    quantity: incoming.quantity,
+    side: incoming.side,
+    orderId: incoming.orderId ?? incoming.id,
+  };
+}
+
 export default function Home() {
-  const [selectedSymbol, setSelectedSymbol] = useState(SYMBOL);
+  const selectedSymbol = SYMBOL;
   const [ticker, setTicker] = useState<number | null>(null);
   const [depth, setDepth] = useState<DepthState>({ bids: [], asks: [] });
   const [trades, setTrades] = useState<TradeState[]>([]);
@@ -32,13 +51,6 @@ export default function Home() {
   const [userId, setUserId] = useState("demo-user");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (orderType === "MARKET") {
-      const currentPrice = (ticker ?? Number(price)) || 0;
-      setPrice(String(currentPrice + 100));
-    }
-  }, [orderType, ticker]);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -74,7 +86,7 @@ export default function Home() {
         }
 
         if (Array.isArray(tradesData)) {
-          setTrades(tradesData);
+          setTrades(tradesData.map(normalizeTrade).filter((trade): trade is TradeState => trade !== null));
         }
       } catch {
         setMessage("Failed to load initial market snapshot.");
@@ -117,7 +129,11 @@ export default function Home() {
         }
 
         if (payload.channel.startsWith("trade@")) {
-          setTrades((currentTrades) => [payload.data as TradeState, ...currentTrades].slice(0, 20));
+          const normalizedTrade = normalizeTrade(payload.data);
+
+          if (normalizedTrade) {
+            setTrades((currentTrades) => [normalizedTrade, ...currentTrades].slice(0, 20));
+          }
         }
       };
 
@@ -181,214 +197,44 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#13213d_0%,#08111f_45%,#050914_100%)] text-slate-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 lg:px-8">
-        <header className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/80">Exchange terminal</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Client-side order desk</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">API: {API_BASE}</span>
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">WS: {status}</span>
-          </div>
-        </header>
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-6 px-4 py-6 lg:px-8">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+          <ChartPlaceholder symbol={selectedSymbol} />
 
-        <section className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_360px]">
-          <aside className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/20 backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Tickers</p>
-            <button
-              type="button"
-              onClick={() => setSelectedSymbol(SYMBOL)}
-              className={`mt-4 flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left transition ${
-                selectedSymbol === SYMBOL
-                  ? "border-cyan-400/50 bg-cyan-400/10"
-                  : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
-              }`}
-            >
+          <div className="flex w-full shrink-0 flex-col gap-4" style={{ width: "920px" }}>
+            <div className="flex items-center justify-between border border-white/10 bg-black/20 px-5 py-3 text-sm text-slate-400 backdrop-blur" style={{ borderRadius: 24 }}>
               <div>
-                <div className="text-lg font-semibold">{SYMBOL}</div>
-                <div className="text-sm text-slate-400">Spot market</div>
+                <span className="text-slate-500">Market</span>
+                <span className="ml-2 font-semibold text-slate-100">{selectedSymbol}</span>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-slate-400">Last</div>
-                <div className="text-lg font-semibold text-cyan-300">{ticker ?? "--"}</div>
-              </div>
-            </button>
-          </aside>
-
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Market</p>
-                <h2 className="mt-2 text-3xl font-semibold">{selectedSymbol}</h2>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Ticker</div>
-                  <div className="mt-1 text-xl font-semibold text-cyan-300">{ticker ?? "--"}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Bids</div>
-                  <div className="mt-1 text-xl font-semibold">{depth.bids.length}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Trades</div>
-                  <div className="mt-1 text-xl font-semibold">{trades.length}</div>
-                </div>
+                <span className="text-slate-500">WebSocket</span>
+                <span className="ml-2 font-semibold text-slate-100">{status}</span>
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-200">Orderbook bids</h3>
-                  <span className="text-xs text-slate-400">Price / Qty</span>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {depth.bids.length > 0 ? (
-                    depth.bids.slice(0, 8).map(([levelPrice, levelQuantity]) => (
-                      <div key={`${levelPrice}-${levelQuantity}`} className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm">
-                        <span className="text-emerald-200">{levelPrice}</span>
-                        <span className="text-slate-200">{levelQuantity}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-slate-400">
-                      No bid levels yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-rose-400/15 bg-rose-400/5 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-rose-200">Orderbook asks</h3>
-                  <span className="text-xs text-slate-400">Price / Qty</span>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {depth.asks.length > 0 ? (
-                    depth.asks.slice(0, 8).map(([levelPrice, levelQuantity]) => (
-                      <div key={`${levelPrice}-${levelQuantity}`} className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm">
-                        <span className="text-rose-200">{levelPrice}</span>
-                        <span className="text-slate-200">{levelQuantity}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-slate-400">
-                      No ask levels yet.
-                    </div>
-                  )}
-                </div>
-              </div>
+            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+              <OrderbookTradesPanel symbol={selectedSymbol} ticker={ticker} depth={depth} trades={trades} />
+              <OrderTicket
+                symbol={selectedSymbol}
+                ticker={ticker}
+                orderSide={orderSide}
+                setOrderSide={setOrderSide}
+                orderType={orderType}
+                setOrderType={setOrderType}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                price={price}
+                setPrice={setPrice}
+                userId={userId}
+                setUserId={setUserId}
+                submitting={submitting}
+                message={message}
+                onSubmit={handlePlaceOrder}
+              />
             </div>
-
-            <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-300">Recent trades</h3>
-                <span className="text-xs text-slate-400">Latest 20</span>
-              </div>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                <div className="max-h-80 divide-y divide-white/5 overflow-y-auto">
-                  {trades.length > 0 ? (
-                    trades.map((trade, index) => (
-                      <div key={`${trade.orderId ?? "trade"}-${index}`} className="grid grid-cols-4 gap-3 px-4 py-3 text-sm">
-                        <span className="text-cyan-200">{trade.price ?? "--"}</span>
-                        <span>{trade.quantity ?? "--"}</span>
-                        <span>{trade.side ?? "--"}</span>
-                        <span className="text-slate-400">{trade.userId ?? "system"}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-6 text-sm text-slate-400">No trades yet.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <aside className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Place order</p>
-              <h3 className="mt-2 text-2xl font-semibold">{selectedSymbol}</h3>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Side</span>
-                <select
-                  value={orderSide}
-                  onChange={(event) => setOrderSide(event.target.value as "BUY" | "SELL")}
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
-                >
-                  <option value="BUY">BUY</option>
-                  <option value="SELL">SELL</option>
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Order type</span>
-                <select
-                  value={orderType}
-                  onChange={(event) => setOrderType(event.target.value as "LIMIT" | "MARKET")}
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
-                >
-                  <option value="LIMIT">LIMIT</option>
-                  <option value="MARKET">MARKET</option>
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Quantity</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(event) => setQuantity(event.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">Price</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={price}
-                  onChange={(event) => setPrice(event.target.value)}
-                  disabled={orderType === "MARKET"}
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                <p className="mt-2 text-xs text-slate-400">
-                  Market order uses current ticker + 100 as the limit price.
-                </p>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm text-slate-300">User ID</span>
-                <input
-                  value={userId}
-                  onChange={(event) => setUserId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={handlePlaceOrder}
-                disabled={submitting}
-                className="mt-2 w-full rounded-2xl bg-linear-to-r from-cyan-400 to-blue-500 px-4 py-3 font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {submitting ? "Submitting..." : "Place order"}
-              </button>
-
-              {message ? (
-                <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-200">
-                  {message}
-                </div>
-              ) : null}
-            </div>
-          </aside>
-        </section>
+          </div>
+        </div>
       </div>
     </main>
   );

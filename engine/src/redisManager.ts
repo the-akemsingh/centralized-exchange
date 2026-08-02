@@ -32,6 +32,7 @@ export class RedisManager {
   }
 
   public publisher(channel: string, message: string) {
+    console.log("response publishing for channel - ",channel)
     this.redisPublisher.publish(channel, message)
   }
 

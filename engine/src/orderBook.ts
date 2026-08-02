@@ -49,6 +49,7 @@ export class OrderBook {
     ) {
         let fills: fill[] = []
         let filledQuantity = 0;
+        this.bids.sort((a, b) => b.price - a.price);
         for (let bid of this.bids) {
             if (quantity - filledQuantity === 0) break;
 
@@ -87,7 +88,7 @@ export class OrderBook {
 
                 this.lastTradedPrice = bid.price
                 const depth = this.getDepth()
-                this.publishUpdates(this.lastTradedPrice, depth, recentTrade)
+                this.publishUpdates(depth, this.lastTradedPrice, recentTrade)
             }
         }
         for (let i = 0; i < this.bids.length; i++) {
@@ -106,6 +107,8 @@ export class OrderBook {
                 userId,
                 filledQuantity
             })
+            const depth = this.getDepth()
+            this.publishUpdates(depth)
             return {
                 symbol: `${this.baseAsset}_${this.quoteAsset}`,
                 fills,
@@ -131,14 +134,18 @@ export class OrderBook {
         orderId: string, userId: string, quantity: number, price: number
     ) {
 
+        console.log("now inside matchAsk - as use is buying")
+
         let fills: fill[] = []
         let filledQuantity = 0;
 
-
+        this.asks.sort((a, b) => a.price - b.price);
         for (let ask of this.asks) {
+            console.log("looping through asks")
             if (quantity - filledQuantity === 0) break;
 
             if (ask.price <= price) {
+                console.log("relevant ask founded")
                 const filledQuantityFromThisAsk = Math.min(
                     ask.quantity - ask.filledQuantity,
                     quantity - filledQuantity
@@ -151,13 +158,13 @@ export class OrderBook {
                     price: ask.price,
                     quantity: filledQuantityFromThisAsk
                 });
-
-                this.trades.push({
+                const recentTrade: trade = {
                     id: uuidv7(),
                     amount: ask.price,
                     quantity: filledQuantityFromThisAsk,
                     side: "BUY",
-                })
+                }
+                this.trades.push(recentTrade)
                 this.lastTradedPrice = ask.price
 
 
@@ -182,15 +189,21 @@ export class OrderBook {
 
                 // Give the buyer their base assets
                 balances.get(userId)![this.baseAsset].available += filledQuantityFromThisAsk;
+
+                this.lastTradedPrice = ask.price
+                const depth = this.getDepth()
+                this.publishUpdates(depth, this.lastTradedPrice, recentTrade)
             }
         }
         for (let i = 0; i < this.asks.length; i++) {
+            console.log("remvoving the ask order that has been fulfilled")
             if (this.asks[i].filledQuantity >= this.asks[i].quantity) {
                 this.asks.splice(i, 1);
                 i--;
             }
         }
         if (quantity - filledQuantity > 0) {
+            console.log("adding order in orderbook and not filled fully")
             //means now orderbook is empty of there is no matching order  - add this order in orderbook
             this.addOrder({
                 quantity,
@@ -200,6 +213,8 @@ export class OrderBook {
                 userId,
                 filledQuantity
             })
+            const depth = this.getDepth()
+            this.publishUpdates(depth)
             return {
                 symbol: `${this.baseAsset}_${this.quoteAsset}`,
                 fills,
@@ -224,6 +239,7 @@ export class OrderBook {
     }
 
     getDepth(): { bids: [string, string][], asks: [string, string][] } {
+        console.log("getting depth")
         const bids: [string, string][] = []; // [price, quantity]
         const asks: [string, string][] = [];
 
@@ -235,7 +251,7 @@ export class OrderBook {
             if (!bidsObj[order.price]) {
                 bidsObj[order.price] = 0;
             }
-            bidsObj[order.price] += order.quantity;
+            bidsObj[order.price] += order.quantity - order.filledQuantity;
         }
 
         for (let i = 0; i < this.asks.length; i++) {
@@ -243,16 +259,22 @@ export class OrderBook {
             if (!asksObj[order.price]) {
                 asksObj[order.price] = 0;
             }
-            asksObj[order.price] += order.quantity;
+            asksObj[order.price] += order.quantity - order.filledQuantity;
         }
 
         for (const price in bidsObj) {
-            bids.push([price, bidsObj[price].toString()]);
+            if (bidsObj[price] > 0) {
+                bids.push([price, bidsObj[price].toString()]);
+            }
         }
 
         for (const price in asksObj) {
-            asks.push([price, asksObj[price].toString()]);
+            if (asksObj[price] > 0) {
+                asks.push([price, asksObj[price].toString()]);
+            }
         }
+
+        console.log("depth calculatoi done returing rep")
 
         return {
             bids,
@@ -285,16 +307,20 @@ export class OrderBook {
         }
     }
 
-    publishUpdates(lastTradedPrice: number, depth: { bids: [string, string][], asks: [string, string][] }, recentTrade: trade) {
+    publishUpdates(depth: { bids: [string, string][], asks: [string, string][] }, lastTradedPrice?: number, recentTrade?: trade) {
         const ticker = this.ticker()
-        this.redisClient.publisher(`trade@${ticker}`, JSON.stringify(recentTrade))
-        this.redisClient.publisher(`ticker@${ticker}`, JSON.stringify(lastTradedPrice))
+        if (recentTrade) {
+            this.redisClient.publisher(`trade@${ticker}`, JSON.stringify(recentTrade))
+        }
+        if (lastTradedPrice) {
+            this.redisClient.publisher(`ticker@${ticker}`, JSON.stringify(lastTradedPrice))
+        }
         this.redisClient.publisher(`depth@${ticker}`, JSON.stringify(depth))
     }
 
     deleteOrder(orderId: string) {
-        this.asks.filter(ask => ask.orderId !== orderId)
-        this.bids.filter(bid => bid.orderId !== orderId)
+        this.asks = this.asks.filter(ask => ask.orderId !== orderId);
+        this.bids = this.bids.filter(bid => bid.orderId !== orderId);
 
         return {
             status: "ORDER_DELETED"

@@ -10,6 +10,7 @@ app.use(cors());
 
 app.get("/depth/:symbol", async (req, res) => {
   const { symbol } = req.params;
+  console.log("get depth req rec,")
   const response = await RedisManager.getInstance().sendAndAwait({
     typeOfOrder: "GET_DEPTH",
     data: { symbol }
@@ -40,7 +41,9 @@ app.get("/trades", async (req, res) => {
 });
 
 app.post("/trades", async (req, res) => {
+  console.log("trade create req received")
   const { symbol, side, price, quantity, userId } = req.body;
+  console.log(symbol, side, price, quantity, userId )
   const response = await RedisManager.getInstance().sendAndAwait({
     typeOfOrder: "CREATE_ORDER",
     data: {

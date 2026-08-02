@@ -10,7 +10,7 @@ type incomingMessageType = {
 }
 const app = express()
 const httpServer = app.listen(process.env.WEBSOCKET_SERVER_PORT || 3002, () => {
-    console.log(`Websocket server running on port${process.env.WEBSOCKET_SERVER_PORT || 3002}`)
+    console.log(`Websocket server running on port ${process.env.WEBSOCKET_SERVER_PORT || 3002}`)
 })
 const webSocketServer = new WebSocketServer({
     server: httpServer
