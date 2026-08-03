@@ -111,5 +111,5 @@ while (true) {
 
 
 function Publish(channel: string, message: string) {
-    redisClient.publisher(channel, message);
+    redisClient.apiResponsepublisher(channel, message);
 }

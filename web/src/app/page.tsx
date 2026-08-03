@@ -7,7 +7,7 @@ import { OrderbookTradesPanel } from "@/components/trading/orderbook-trades-pane
 import type { AccountState, DepthState, TradeState } from "@/components/trading/types";
 
 const SYMBOL = "TATA_INR";
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3005";
 const STORAGE_KEY = "exchange-user-id";
 
@@ -112,6 +112,27 @@ export default function Home() {
       mounted = false;
     };
   }, []);
+
+  const refreshAccount = async () => {
+    const storedUserId = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!storedUserId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/getBalance/${storedUserId}`, {
+        method: "GET"
+      });
+
+      const payload = await response.json();
+      const fetchedAccount = (payload?.response ?? null) as AccountState | null;
+      setAccount(fetchedAccount);
+      setAuthStatus("Balance updated");
+    } catch {
+      setAuthStatus("Balance refresh failed");
+    }
+  };
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -230,7 +251,7 @@ export default function Home() {
     setMessage(null);
 
     const numericQuantity = Number(quantity);
-    const numericPrice = orderType === "MARKET" ? (ticker ?? 0) + 100 : Number(price);
+    const numericPrice = orderType === "MARKET" ? (ticker ?? 0) : Number(price);
 
     try {
       const response = await fetch(`${API_BASE}/trades`, {
@@ -248,7 +269,13 @@ export default function Home() {
       });
 
       const result = await response.json();
-      setMessage(`Order submitted: ${result?.status ?? "ok"}`);
+
+      if (response.ok) {
+        await refreshAccount();
+        setMessage(`Order submitted: ${result?.status ?? "ok"}`);
+      } else {
+        setMessage(`Order failed: ${result?.message ?? "please try again"}`);
+      }
     } catch {
       setMessage("Failed to submit order.");
     } finally {

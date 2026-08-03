@@ -17,7 +17,7 @@ export class RedisManager {
 
     constructor() {
         this.redisSubscriber = createClient({
-            url: process.env.REDIS_URL || "redis://localhost:6379",
+            url: process.env.REDIS_TRADE_UPDATES_SERVER_URL || "redis://localhost:6378",
         });
         this.redisSubscriber.connect();
     }

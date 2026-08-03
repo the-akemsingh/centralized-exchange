@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { RedisManager } from "./redisManager";
+import { prisma } from "@db/prismaClient"
 dotenv.config();
 
 const app = express();
@@ -60,13 +61,12 @@ app.get("/tickers/:symbol", async (req, res) => {
 });
 
 app.get("/trades", async (req, res) => {
-  const { symbol, limit } = req.query;
-  const parsedLimit = limit ? parseInt(limit as string, 10) : 50;
+  const { symbol } = req.query;
+  //in here, we should add limit query filter too
   const response = await RedisManager.getInstance().sendAndAwait({
     type: "GET_TRADES",
     data: {
       symbol: symbol as string,
-      limit: parsedLimit
     }
   });
   res.json(response);
@@ -100,6 +100,55 @@ app.delete("/trades/:orderId", async (req, res) => {
     },
   });
   res.status(201).json(response);
+});
+
+app.get("/klines", async (req, res) => {
+  const { symbol, interval, startTime, endTime, limit } = req.query;
+  if (!symbol || !interval || !startTime || !endTime) {
+    return res.status(400).json({
+      message: "Missing required query parameters",
+    });
+  }
+  const bucketMap: Record<string, string> = {
+    "1m": "1 minute",
+    "5m": "5 minutes",
+    "15m": "15 minutes",
+    "30m": "30 minutes",
+    "1h": "1 hour",
+    "4h": "4 hours",
+    "1d": "1 day",
+  };
+  const bucket = bucketMap[interval as string];
+  if (!bucket) {
+    return res.status(400).json({
+      message: "Unsupported interval",
+    });
+  }
+  const candles = await prisma.$queryRawUnsafe(
+    `
+        SELECT
+            time_bucket('${bucket}', timestamp) AS time,
+            first(price, timestamp) AS open,
+            max(price) AS high,
+            min(price) AS low,
+            last(price, timestamp) AS close,
+            sum(quantity) AS volume
+        FROM "Trade"
+        WHERE symbol = $1
+          AND timestamp >= to_timestamp($2 / 1000.0)
+          AND timestamp <= to_timestamp($3 / 1000.0)
+        GROUP BY time
+        ORDER BY time ASC
+        LIMIT $4
+        `,
+    symbol,
+    Number(startTime),
+    Number(endTime),
+    Number(limit ?? 500)
+  );
+
+  res.status(200).json(candles);
+  return
 });
 
 app.listen(`${process.env.PORT || 3001}`, () => {

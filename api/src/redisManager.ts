@@ -12,7 +12,6 @@ type OrderMessage = {
     userId?: string;
     price?: number;
     orderId?: string;
-    limit?: number;
   };
 };
 

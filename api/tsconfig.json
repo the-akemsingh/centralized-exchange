@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     // Enable latest features
+    "paths": {
+      "@db/*": ["../db/*"]
+    },
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "ESNext",
@@ -21,7 +24,6 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false,
-    "rootDir": ".",
+    "noPropertyAccessFromIndexSignature": false
   }
 }

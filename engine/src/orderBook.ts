@@ -52,7 +52,7 @@ export class OrderBook {
         for (let bid of this.bids) {
             if (quantity - filledQuantity === 0) break;
 
-            if (bid.price >= price && bid.userId!==userId) {
+            if (bid.price >= price && bid.userId !== userId) {
                 const filledQuantityFromThisBid = Math.min(bid.quantity - bid.filledQuantity, quantity - filledQuantity)
 
                 filledQuantity += filledQuantityFromThisBid
@@ -88,6 +88,7 @@ export class OrderBook {
                 this.lastTradedPrice = bid.price
                 const depth = this.getDepth()
                 this.publishUpdates(depth, this.lastTradedPrice, recentTrade)
+                this.publishToDbQueue({ symbol: this.ticker(), price: this.lastTradedPrice, quantity: filledQuantityFromThisBid })
             }
         }
         for (let i = 0; i < this.bids.length; i++) {
@@ -143,7 +144,7 @@ export class OrderBook {
             console.log("looping through asks")
             if (quantity - filledQuantity === 0) break;
 
-            if (ask.price <= price && ask.userId!==userId) {
+            if (ask.price <= price && ask.userId !== userId) {
                 console.log("relevant ask founded")
                 const filledQuantityFromThisAsk = Math.min(
                     ask.quantity - ask.filledQuantity,
@@ -308,12 +309,16 @@ export class OrderBook {
     publishUpdates(depth: { bids: [string, string][], asks: [string, string][] }, lastTradedPrice?: number, recentTrade?: trade) {
         const ticker = this.ticker()
         if (recentTrade) {
-            this.redisClient.publisher(`trade@${ticker}`, JSON.stringify(recentTrade))
+            this.redisClient.tradeUpdatesPublisher(`trade@${ticker}`, JSON.stringify(recentTrade))
         }
         if (lastTradedPrice) {
-            this.redisClient.publisher(`ticker@${ticker}`, JSON.stringify(lastTradedPrice))
+            this.redisClient.tradeUpdatesPublisher(`ticker@${ticker}`, JSON.stringify(lastTradedPrice))
         }
-        this.redisClient.publisher(`depth@${ticker}`, JSON.stringify(depth))
+        this.redisClient.tradeUpdatesPublisher(`depth@${ticker}`, JSON.stringify(depth))
+    }
+
+    publishToDbQueue(trade: { symbol: string, price: number, quantity: number }) {
+        this.redisClient.dbPublisher("TRADE_RECORDED", JSON.stringify(trade))
     }
 
     deleteOrder(orderId: string) {

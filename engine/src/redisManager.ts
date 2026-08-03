@@ -4,19 +4,39 @@ dotenv.config();
 
 export class RedisManager {
   private static redisManagerInsatance: RedisManager;
-  private redisPublisher: RedisClientType;
+  private redisApiResponsePublisher: RedisClientType;
   private redisQueue: RedisClientType;
+  private redisTradeUpdatesPublisher: RedisClientType;
+  private redisDbQueuePublisher: RedisClientType;
+  private ready: Promise<void>;
 
   private constructor() {
-    this.redisPublisher = createClient({
+    this.redisApiResponsePublisher = createClient({
       url: process.env.REDIS_URL || "redis://localhost:6379",
     });
-    this.redisPublisher.connect();
 
     this.redisQueue = createClient({
       url: process.env.REDIS_URL || "redis://localhost:6379",
     });
-    this.redisQueue.connect();
+
+    this.redisTradeUpdatesPublisher = createClient({
+      url: process.env.REDIS_TRADE_UPDATES_SERVER_URL || "redis://localhost:6378",
+    });
+
+    this.redisDbQueuePublisher = createClient({
+      url: process.env.REDIS_DATABASE_QUEUE_SERVER_URL || "redis://localhost:6377",
+    });
+
+    this.ready = Promise.all([
+      this.redisApiResponsePublisher.connect(),
+      this.redisQueue.connect(),
+      this.redisTradeUpdatesPublisher.connect(),
+      this.redisDbQueuePublisher.connect()
+    ]).then(() => {
+      console.log("[api][redis] clients connected");
+    }).catch((e) => {
+      console.log("Error in redis connection", e)
+    });
   }
 
   public static getInstance() {
@@ -31,12 +51,15 @@ export class RedisManager {
     return await this.redisQueue.rPop("messages");
   }
 
-  public publisher(channel: string, message: string) {
-    console.log("response publishing for channel - ",channel)
-    this.redisPublisher.publish(channel, message)
+  public apiResponsepublisher(channel: string, message: string) {
+    this.redisApiResponsePublisher.publish(channel, message)
   }
 
-  // TODO : a third redis client, that will push the events for a particular BASEASSET_QUOTEASSET. events are : ticker (TATA_INR current price Rs89.9), trade (list of all recent trades happens for  TATA_INR, maybe last 20), depth (orderbook for TATA_INR) - we emit all events from engine, whoever is subscribed to a ticker will get those events
+  public tradeUpdatesPublisher(channel: string, message: string) {
+    this.redisTradeUpdatesPublisher.publish(channel, message)
+  }
 
-  // TODO : create a fourth redis client, that will push the orders/trades happening in a queue, from where db worker will get them and sync the database
+  public dbPublisher(channel: string, message: string) {
+    this.redisDbQueuePublisher.lPush(channel, message)
+  }
 }
